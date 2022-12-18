@@ -1,12 +1,23 @@
 package main
 
-import "github.com/jrouviere/minidb/sstable"
+import (
+	"fmt"
+
+	"github.com/jrouviere/minikv/sstable"
+)
 
 func main() {
-	err := sstable.Create("./cities", data)
+	err := sstable.WriteFile("./cities.sst", data)
 	if err != nil {
 		panic(err)
 	}
+
+	sst, err := sstable.Load("./cities.sst")
+	if err != nil {
+		panic(err)
+	}
+
+	fmt.Print(sst.Debug())
 }
 
 var data = map[string]string{

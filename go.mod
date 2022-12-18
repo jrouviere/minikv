@@ -1,3 +1,3 @@
-module github.com/jrouviere/minidb
+module github.com/jrouviere/minikv
 
 go 1.19

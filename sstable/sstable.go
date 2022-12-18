@@ -8,20 +8,24 @@ import (
 	"strings"
 )
 
-// File format:
-//
-// 1. sstable file format:
-// magic1: uint64
-// N: uint64 (nb of keys)
-// N times {[key] -> [value]}
-// key and value are both string stored as:
-// len: uint64
-// len times char: byte
-
-const magic1 = 0x7473732d696e696d
+const magic = 0x7473732d696e696d
 
 const sparcity = 16
 
+/*
+SSTable is an immutable file storing a list of sorted string.
+Deleted keys are stored as en empty string.
+
+File format:
+
+magic: uint64
+N: uint64 (nb of keys)
+N times {[key] -> [value]}
+
+key and value are both string stored as:
+len: uint64
+len times char: byte
+*/
 type SSTable struct {
 	filename string
 	index    []keyOff // in-memory sparse index
@@ -41,7 +45,7 @@ func WriteFile(filename string, memtable map[string]string) error {
 	sstWr := newWriter(sst)
 	defer sstWr.Flush()
 
-	if err := sstWr.WriteUint64(magic1); err != nil {
+	if err := sstWr.WriteUint64(magic); err != nil {
 		return err
 	}
 
@@ -76,7 +80,7 @@ func Load(filename string) (*SSTable, error) {
 		return nil, err
 	}
 
-	if m1 != magic1 {
+	if m1 != magic {
 		return nil, fmt.Errorf("unexpected magic: %v", m1)
 	}
 
@@ -113,7 +117,7 @@ func Load(filename string) (*SSTable, error) {
 	}, nil
 }
 
-func (sst *SSTable) Get(key string) (string, bool, error) {
+func (sst *SSTable) Get(key string) (val string, found bool, err error) {
 	file, err := os.Open(sst.filename)
 	if err != nil {
 		return "", false, err
@@ -161,6 +165,7 @@ func (sst *SSTable) Get(key string) (string, bool, error) {
 
 func (sst *SSTable) Debug() string {
 	var sb strings.Builder
+	fmt.Fprintf(&sb, "SST: %v\n", sst.filename)
 	for _, idx := range sst.index {
 		fmt.Fprintf(&sb, "0x%04X: %v\n", idx.offset, idx.key)
 	}

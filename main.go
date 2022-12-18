@@ -2,33 +2,56 @@ package main
 
 import (
 	"fmt"
+	"time"
 
-	"github.com/jrouviere/minikv/sstable"
+	"github.com/jrouviere/minikv/db"
 )
 
 func main() {
-	err := sstable.WriteFile("./cities.sst", data)
-	if err != nil {
-		panic(err)
-	}
+	store := db.New("./data/")
 
-	sst, err := sstable.Load("./cities.sst")
-	if err != nil {
-		panic(err)
-	}
+	store.Set("deleted", "wrong")
 
-	fmt.Print(sst.Debug())
-	fmt.Println(sst.Get("Cairo"))
-	fmt.Println(sst.Get("Osaka"))
-	fmt.Println(sst.Get("Mumbai"))
-	fmt.Println(sst.Get("Beijing"))
-	fmt.Println(sst.Get("Tokyo"))
-	fmt.Println(sst.Get("Aaa"))
-	fmt.Println(sst.Get("Fff"))
-	fmt.Println(sst.Get("Zzz"))
+	i := 0
+	for k, v := range data1 {
+		store.Set(k, v)
+
+		i++
+		if i%10 == 0 {
+			if err := store.Flush(); err != nil {
+				panic(err)
+			}
+		}
+	}
+	store.Set("inmemory", "true")
+	store.Delete("deleted")
+
+	check(store, "Cairo")
+	check(store, "Osaka")
+	check(store, "Mumbai")
+	check(store, "Beijing")
+	check(store, "Tokyo")
+	check(store, "Aaa")
+	check(store, "Fff")
+	check(store, "Zzz")
+	check(store, "Paris")
+	check(store, "London")
+	check(store, "inmemory")
+	check(store, "deleted")
 }
 
-var data = map[string]string{
+func check(store *db.DB, key string) {
+	start := time.Now()
+
+	val := store.Get(key)
+	if val == "" {
+		fmt.Printf("%s: not found [%v]\n", key, time.Since(start))
+	} else {
+		fmt.Printf("%s: %s [%v]\n", key, val, time.Since(start))
+	}
+}
+
+var data1 = map[string]string{
 	"Tokyo":          "37,468,000",
 	"Delhi":          "28,514,000",
 	"Shanghai":       "25,582,000",
@@ -54,4 +77,19 @@ var data = map[string]string{
 	"Los Angeles":    "12,458,000",
 	"Moscow":         "12,410,000",
 	"Shenzhen":       "11,908,000",
+	"Lahore":         "11,738,000",
+	"Bangalore":      "11,440,000",
+	"Paris":          "10,901,000",
+	"Bogotá":         "10,574,000",
+	"Jakarta":        "10,517,000",
+	"Chennai":        "10,456,000",
+	"Lima":           "10,391,000",
+	"Bangkok":        "10,156,000",
+	"Seoul":          "9,963,000",
+	"Nagoya":         "9,507,000",
+	"Hyderabad":      "9,482,000",
+	"London":         "9,046,000",
+	"Tehran":         "8,896,000",
+	"Chicago":        "8,864,000",
+	"Chengdu":        "8,813,000",
 }

@@ -9,6 +9,9 @@ import (
 	"github.com/jrouviere/minikv/sstable"
 )
 
+// TODO: implement load existing files
+// TODO: wal recovery
+
 type DB struct {
 	dirname   string
 	fileCount int32
@@ -20,6 +23,7 @@ type DB struct {
 }
 
 func New(dirname string) (*DB, error) {
+
 	return &DB{
 		dirname:  dirname,
 		memtable: make(map[string]string),
@@ -29,8 +33,6 @@ func New(dirname string) (*DB, error) {
 func (db *DB) Set(key, value string) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
-
-	// TODO: store in WAL
 
 	// store in memtable
 	db.memtable[key] = value

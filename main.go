@@ -18,6 +18,14 @@ func main() {
 	}
 
 	fmt.Print(sst.Debug())
+	fmt.Println(sst.Get("Cairo"))
+	fmt.Println(sst.Get("Osaka"))
+	fmt.Println(sst.Get("Mumbai"))
+	fmt.Println(sst.Get("Beijing"))
+	fmt.Println(sst.Get("Tokyo"))
+	fmt.Println(sst.Get("Aaa"))
+	fmt.Println(sst.Get("Fff"))
+	fmt.Println(sst.Get("Zzz"))
 }
 
 var data = map[string]string{

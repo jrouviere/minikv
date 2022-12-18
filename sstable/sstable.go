@@ -2,6 +2,7 @@ package sstable
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"sort"
 	"strings"
@@ -19,11 +20,11 @@ import (
 
 const magic1 = 0x7473732d696e696d
 
-const sparcity = 8
+const sparcity = 16
 
 type SSTable struct {
-	file  *os.File
-	index []keyOff // in-memory sparse index
+	filename string
+	index    []keyOff // in-memory sparse index
 }
 
 type keyOff struct {
@@ -67,6 +68,7 @@ func Load(filename string) (*SSTable, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer file.Close()
 
 	sstRd := newReader(file)
 	m1, err := sstRd.ReadUint64()
@@ -106,9 +108,55 @@ func Load(filename string) (*SSTable, error) {
 	}
 
 	return &SSTable{
-		file:  file,
-		index: index,
+		filename: filename,
+		index:    index,
 	}, nil
+}
+
+func (sst *SSTable) Get(key string) (string, bool, error) {
+	file, err := os.Open(sst.filename)
+	if err != nil {
+		return "", false, err
+	}
+	defer file.Close()
+	sstRd := newReader(file)
+
+	// binary search in our sparse index
+	// to find the interval where our key should be in the file
+	next := sort.Search(len(sst.index), func(i int) bool {
+		return key < sst.index[i].key
+	})
+
+	if next == 0 {
+		return "", false, nil // not found
+	}
+	next--
+
+	start := sst.index[next].offset
+	if _, err := sstRd.Seek(start); err != nil {
+		return "", false, err
+	}
+
+	for {
+		rdKey, err := sstRd.ReadString()
+		if err == io.EOF {
+			return "", false, nil // not found
+		}
+		if err != nil {
+			return "", false, err
+		}
+
+		rdValue, err := sstRd.ReadString()
+		if err != nil {
+			return "", false, err
+		}
+		if key == rdKey {
+			return rdValue, true, nil // found it!
+		}
+		if key < rdKey {
+			return "", false, nil // not found
+		}
+	}
 }
 
 func (sst *SSTable) Debug() string {
@@ -117,10 +165,6 @@ func (sst *SSTable) Debug() string {
 		fmt.Fprintf(&sb, "0x%04X: %v\n", idx.offset, idx.key)
 	}
 	return sb.String()
-}
-
-func (sst *SSTable) Close() error {
-	return sst.file.Close()
 }
 
 func toSortedKeys(memtable map[string]string) []string {

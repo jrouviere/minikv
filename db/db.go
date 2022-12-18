@@ -19,11 +19,11 @@ type DB struct {
 	memtable map[string]string
 }
 
-func New(dirname string) *DB {
+func New(dirname string) (*DB, error) {
 	return &DB{
 		dirname:  dirname,
 		memtable: make(map[string]string),
-	}
+	}, nil
 }
 
 func (db *DB) Set(key, value string) {
@@ -67,6 +67,31 @@ func (db *DB) Get(key string) string {
 	}
 
 	return ""
+}
+
+func (db *DB) MergeAll() error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	for len(db.store) > 1 {
+		sst1 := db.store[len(db.store)-2]
+		sst2 := db.store[len(db.store)-1]
+		merged := db.getNextFilename()
+		if err := sstable.Merge(sst1, sst2, merged); err != nil {
+			return err
+		}
+
+		sstMerged, err := sstable.Load(merged)
+		if err != nil {
+			return err
+		}
+		db.store = append(db.store[:len(db.store)-2], sstMerged)
+
+		sst1.Delete()
+		sst2.Delete()
+	}
+
+	return nil
 }
 
 // Flush saves the memtable to disk and clear it

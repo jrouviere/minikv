@@ -45,7 +45,7 @@ func (rd *sstReader) Offset() int64 {
 	return offset
 }
 
-func (rd *sstReader) Seek(offset int64) (int64, error) {
+func (rd *sstReader) SeekTo(offset int64) (int64, error) {
 	return rd.r.Seek(offset, io.SeekStart)
 }
 

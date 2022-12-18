@@ -137,7 +137,7 @@ func (sst *SSTable) Get(key string) (val string, found bool, err error) {
 	next--
 
 	start := sst.index[next].offset
-	if _, err := sstRd.Seek(start); err != nil {
+	if _, err := sstRd.SeekTo(start); err != nil {
 		return "", false, err
 	}
 
@@ -161,6 +161,97 @@ func (sst *SSTable) Get(key string) (val string, found bool, err error) {
 			return "", false, nil // not found
 		}
 	}
+}
+
+func (sst *SSTable) Delete() error {
+	return os.Remove(sst.filename)
+}
+
+// Merge two sstables together
+// sst2 is more recent than sst1
+// ie: sst2 overrides key from sst1
+func Merge(sst1, sst2 *SSTable, destination string) error {
+	f1, err := os.Open(sst1.filename)
+	if err != nil {
+		return err
+	}
+	defer f1.Close()
+
+	f2, err := os.Open(sst2.filename)
+	if err != nil {
+		return err
+	}
+	defer f2.Close()
+
+	rd1, err := processHeader(f1)
+	if err != nil {
+		return err
+	}
+	rd2, err := processHeader(f2)
+	if err != nil {
+		return err
+	}
+
+	// we use a memtable to simplify things
+	// but really the result should be written
+	// in a sst file directly
+	memtable := make(map[string]string)
+
+	key1, value1 := nextKey(rd1)
+	key2, value2 := nextKey(rd2)
+
+	for key1 != "" || key2 != "" {
+		switch {
+		case key1 == key2:
+			memtable[key2] = value2
+			key1, value1 = nextKey(rd1)
+			key2, value2 = nextKey(rd2)
+
+		case key1 == "" || key2 < key1:
+			memtable[key2] = value2
+			key2, value2 = nextKey(rd2)
+
+		case key2 == "" || key1 < key2:
+			memtable[key1] = value1
+			key1, value1 = nextKey(rd1)
+
+		default:
+			panic("should not happen")
+		}
+	}
+
+	return WriteFile(destination, memtable)
+}
+
+func processHeader(file *os.File) (*sstReader, error) {
+	rd := newReader(file)
+
+	m1, err := rd.ReadUint64()
+	if err != nil {
+		return nil, err
+	}
+
+	if m1 != magic {
+		return nil, fmt.Errorf("unexpected magic: %v", m1)
+	}
+
+	if _, err := rd.ReadUint64(); err != nil {
+		return nil, err
+	}
+
+	return rd, nil
+}
+
+func nextKey(rd *sstReader) (string, string) {
+	key, err := rd.ReadString()
+	if err != nil {
+		return "", ""
+	}
+	val, err := rd.ReadString()
+	if err != nil {
+		return "", ""
+	}
+	return key, val
 }
 
 func (sst *SSTable) Debug() string {

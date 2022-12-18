@@ -8,7 +8,10 @@ import (
 )
 
 func main() {
-	store := db.New("./data/")
+	store, err := db.New("./data/")
+	if err != nil {
+		panic(err)
+	}
 
 	store.Set("deleted", "wrong")
 
@@ -38,6 +41,21 @@ func main() {
 	check(store, "London")
 	check(store, "inmemory")
 	check(store, "deleted")
+
+	if err := store.Flush(); err != nil {
+		panic(err)
+	}
+
+	if err := store.MergeAll(); err != nil {
+		panic(err)
+	}
+
+	check(store, "Cairo")
+	check(store, "Paris")
+	check(store, "London")
+	check(store, "inmemory")
+	check(store, "deleted")
+	check(store, "Zzz")
 }
 
 func check(store *db.DB, key string) {

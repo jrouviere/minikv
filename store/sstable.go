@@ -1,4 +1,4 @@
-package sstable
+package store
 
 import (
 	"fmt"
@@ -223,7 +223,7 @@ func Merge(sst1, sst2 *SSTable, destination string) error {
 	return WriteFile(destination, memtable)
 }
 
-func processHeader(file *os.File) (*sstReader, error) {
+func processHeader(file *os.File) (*fileReader, error) {
 	rd := newReader(file)
 
 	m1, err := rd.ReadUint64()
@@ -242,7 +242,7 @@ func processHeader(file *os.File) (*sstReader, error) {
 	return rd, nil
 }
 
-func nextKey(rd *sstReader) (string, string) {
+func nextKey(rd *fileReader) (string, string) {
 	key, err := rd.ReadString()
 	if err != nil {
 		return "", ""

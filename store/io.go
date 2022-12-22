@@ -1,4 +1,4 @@
-package sstable
+package store
 
 import (
 	"bufio"
@@ -7,23 +7,23 @@ import (
 	"io"
 )
 
-type sstReader struct {
+type fileReader struct {
 	r io.ReadSeeker
 }
 
-func newReader(rd io.ReadSeeker) *sstReader {
-	return &sstReader{
+func newReader(rd io.ReadSeeker) *fileReader {
+	return &fileReader{
 		r: rd,
 	}
 }
 
-func (rd *sstReader) ReadUint64() (uint64, error) {
+func (rd *fileReader) ReadUint64() (uint64, error) {
 	var v uint64
 	err := binary.Read(rd.r, binary.LittleEndian, &v)
 	return v, err
 }
 
-func (rd *sstReader) ReadString() (string, error) {
+func (rd *fileReader) ReadString() (string, error) {
 	var v uint64
 	if err := binary.Read(rd.r, binary.LittleEndian, &v); err != nil {
 		return "", err
@@ -37,7 +37,7 @@ func (rd *sstReader) ReadString() (string, error) {
 	return string(buf), err
 }
 
-func (rd *sstReader) Offset() int64 {
+func (rd *fileReader) Offset() int64 {
 	offset, err := rd.r.Seek(0, io.SeekCurrent)
 	if err != nil {
 		return -1
@@ -45,25 +45,25 @@ func (rd *sstReader) Offset() int64 {
 	return offset
 }
 
-func (rd *sstReader) SeekTo(offset int64) (int64, error) {
+func (rd *fileReader) SeekTo(offset int64) (int64, error) {
 	return rd.r.Seek(offset, io.SeekStart)
 }
 
-type sstWriter struct {
+type fileWriter struct {
 	w *bufio.Writer
 }
 
-func newWriter(w io.WriteSeeker) *sstWriter {
-	return &sstWriter{
+func newWriter(w io.WriteSeeker) *fileWriter {
+	return &fileWriter{
 		w: bufio.NewWriter(w),
 	}
 }
 
-func (ow *sstWriter) WriteUint64(v uint64) error {
+func (ow *fileWriter) WriteUint64(v uint64) error {
 	return binary.Write(ow.w, binary.LittleEndian, v)
 }
 
-func (ow *sstWriter) WriteString(s string) error {
+func (ow *fileWriter) WriteString(s string) error {
 	if err := binary.Write(ow.w, binary.LittleEndian, uint64(len(s))); err != nil {
 		return err
 	}
@@ -75,6 +75,6 @@ func (ow *sstWriter) WriteString(s string) error {
 	return nil
 }
 
-func (ow *sstWriter) Flush() error {
+func (ow *fileWriter) Flush() error {
 	return ow.w.Flush()
 }

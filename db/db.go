@@ -6,11 +6,10 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/jrouviere/minikv/sstable"
+	"github.com/jrouviere/minikv/store"
 )
 
-// TODO: implement load existing files
-// TODO: wal recovery
+// TODO: implement load existing file
 
 type DB struct {
 	dirname   string
@@ -18,21 +17,31 @@ type DB struct {
 
 	mu sync.RWMutex
 	// from earliest to latest sstable
-	store    []*sstable.SSTable
+	store    []*store.SSTable
 	memtable map[string]string
+	wal      *store.WAL
 }
 
 func New(dirname string) (*DB, error) {
+	wal, err := store.NewWAL(filepath.Join(dirname, "wal.dat"))
+	if err != nil {
+		return nil, err
+	}
 
 	return &DB{
 		dirname:  dirname,
 		memtable: make(map[string]string),
+		wal:      wal,
 	}, nil
 }
 
 func (db *DB) Set(key, value string) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
+
+	if err := db.wal.Commit(key, value); err != nil {
+		panic(err)
+	}
 
 	// store in memtable
 	db.memtable[key] = value
@@ -79,11 +88,11 @@ func (db *DB) MergeAll() error {
 		sst1 := db.store[len(db.store)-2]
 		sst2 := db.store[len(db.store)-1]
 		merged := db.getNextFilename()
-		if err := sstable.Merge(sst1, sst2, merged); err != nil {
+		if err := store.Merge(sst1, sst2, merged); err != nil {
 			return err
 		}
 
-		sstMerged, err := sstable.Load(merged)
+		sstMerged, err := store.Load(merged)
 		if err != nil {
 			return err
 		}
@@ -102,7 +111,7 @@ func (db *DB) Flush() error {
 	defer db.mu.Unlock()
 
 	filename := db.getNextFilename()
-	if err := sstable.WriteFile(filename, db.memtable); err != nil {
+	if err := store.WriteFile(filename, db.memtable); err != nil {
 		return err
 	}
 
@@ -110,13 +119,14 @@ func (db *DB) Flush() error {
 		delete(db.memtable, k)
 	}
 
-	sst, err := sstable.Load(filename)
+	sst, err := store.Load(filename)
 	if err != nil {
 		return err
 	}
 
 	db.store = append(db.store, sst)
-	return nil
+
+	return db.wal.Reset()
 }
 
 func (db *DB) getNextFilename() string {

@@ -2,14 +2,13 @@ package db
 
 import (
 	"fmt"
+	"io/fs"
 	"path/filepath"
 	"sync"
 	"sync/atomic"
 
 	"github.com/jrouviere/minikv/store"
 )
-
-// TODO: implement load existing file
 
 type DB struct {
 	dirname   string
@@ -23,16 +22,33 @@ type DB struct {
 }
 
 func New(dirname string) (*DB, error) {
-	wal, err := store.NewWAL(filepath.Join(dirname, "wal.dat"))
+	walpath := filepath.Join(dirname, "wal.dat")
+
+	memtable, err := store.LoadWAL(walpath)
+	if err != nil {
+		memtable = make(map[string]string)
+	}
+
+	wal, err := store.NewWAL(walpath)
 	if err != nil {
 		return nil, err
 	}
 
-	return &DB{
+	db := &DB{
 		dirname:  dirname,
-		memtable: make(map[string]string),
+		memtable: memtable,
 		wal:      wal,
-	}, nil
+	}
+
+	if err := db.LoadSSTables(); err != nil {
+		return nil, err
+	}
+
+	if err := db.Flush(); err != nil {
+		return nil, err
+	}
+
+	return db, nil
 }
 
 func (db *DB) Set(key, value string) {
@@ -92,7 +108,7 @@ func (db *DB) MergeAll() error {
 			return err
 		}
 
-		sstMerged, err := store.Load(merged)
+		sstMerged, err := store.LoadSST(merged)
 		if err != nil {
 			return err
 		}
@@ -119,7 +135,7 @@ func (db *DB) Flush() error {
 		delete(db.memtable, k)
 	}
 
-	sst, err := store.Load(filename)
+	sst, err := store.LoadSST(filename)
 	if err != nil {
 		return err
 	}
@@ -127,6 +143,29 @@ func (db *DB) Flush() error {
 	db.store = append(db.store, sst)
 
 	return db.wal.Reset()
+}
+
+func (db *DB) LoadSSTables() error {
+	var max int32
+	err := filepath.WalkDir(db.dirname, func(path string, d fs.DirEntry, err error) error {
+		var num int32
+		n, _ := fmt.Sscanf(d.Name(), "data_%d.sst", &num)
+		if n == 1 {
+			if num > max {
+				max = num
+			}
+			sst, err := store.LoadSST(path)
+			if err != nil {
+				return err
+			}
+
+			db.store = append(db.store, sst)
+		}
+		return nil
+	})
+
+	atomic.StoreInt32(&db.fileCount, max)
+	return err
 }
 
 func (db *DB) getNextFilename() string {

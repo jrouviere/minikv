@@ -5,6 +5,34 @@ import (
 	"os"
 )
 
+func LoadWAL(filename string) (map[string]string, error) {
+	f, err := os.Open(filename)
+	if err != nil {
+		return nil, err
+	}
+
+	rd := newReader(f)
+
+	memtable := make(map[string]string)
+
+	for {
+		key, err := rd.ReadString()
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			return nil, err
+		}
+		val, err := rd.ReadString()
+		if err != nil {
+			return nil, err
+		}
+		memtable[key] = val
+	}
+
+	return memtable, nil
+}
+
 type WAL struct {
 	file *os.File
 	wr   *fileWriter

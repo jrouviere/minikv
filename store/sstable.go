@@ -67,7 +67,7 @@ func WriteFile(filename string, memtable map[string]string) error {
 	return nil
 }
 
-func Load(filename string) (*SSTable, error) {
+func LoadSST(filename string) (*SSTable, error) {
 	file, err := os.Open(filename)
 	if err != nil {
 		return nil, err

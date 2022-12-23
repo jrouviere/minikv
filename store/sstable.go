@@ -36,7 +36,7 @@ type keyOff struct {
 	offset int64
 }
 
-func WriteFile(filename string, memtable map[string]string) error {
+func WriteFile(filename string, memtable *Treap) error {
 	sst, err := os.Create(filename)
 	if err != nil {
 		return err
@@ -49,22 +49,16 @@ func WriteFile(filename string, memtable map[string]string) error {
 		return err
 	}
 
-	keys := toSortedKeys(memtable)
-
-	if err := sstWr.WriteUint64(uint64(len(keys))); err != nil {
-		return err
-	}
-
-	for _, key := range keys {
-		if err := sstWr.WriteString(key); err != nil {
-			return err
+	var wrErr error
+	memtable.InorderTraversal(func(n *Node) {
+		if err := sstWr.WriteString(n.key); err != nil {
+			wrErr = err
 		}
-		if err := sstWr.WriteString(memtable[key]); err != nil {
-			return err
+		if err := sstWr.WriteString(n.value); err != nil {
+			wrErr = err
 		}
-	}
-
-	return nil
+	})
+	return wrErr
 }
 
 func LoadSST(filename string) (*SSTable, error) {
@@ -84,17 +78,15 @@ func LoadSST(filename string) (*SSTable, error) {
 		return nil, fmt.Errorf("unexpected magic: %v", m1)
 	}
 
-	nKeys, err := sstRd.ReadUint64()
-	if err != nil {
-		return nil, err
-	}
-
 	var index []keyOff
-	for i := uint64(0); i < nKeys; i++ {
+	for i := uint64(0); ; i++ {
 		offset := sstRd.Offset()
 
 		key, err := sstRd.ReadString()
 		if err != nil {
+			if err == io.EOF {
+				break
+			}
 			return nil, err
 		}
 
@@ -195,7 +187,7 @@ func Merge(sst1, sst2 *SSTable, destination string) error {
 	// we use a memtable to simplify things
 	// but really the result should be written
 	// in a sst file directly
-	memtable := make(map[string]string)
+	var memtable Treap
 
 	key1, value1 := nextKey(rd1)
 	key2, value2 := nextKey(rd2)
@@ -203,16 +195,16 @@ func Merge(sst1, sst2 *SSTable, destination string) error {
 	for key1 != "" || key2 != "" {
 		switch {
 		case key1 == key2:
-			memtable[key2] = value2
+			memtable.Upsert(key2, value2)
 			key1, value1 = nextKey(rd1)
 			key2, value2 = nextKey(rd2)
 
 		case key1 == "" || key2 < key1:
-			memtable[key2] = value2
+			memtable.Upsert(key2, value2)
 			key2, value2 = nextKey(rd2)
 
 		case key2 == "" || key1 < key2:
-			memtable[key1] = value1
+			memtable.Upsert(key1, value1)
 			key1, value1 = nextKey(rd1)
 
 		default:
@@ -220,7 +212,7 @@ func Merge(sst1, sst2 *SSTable, destination string) error {
 		}
 	}
 
-	return WriteFile(destination, memtable)
+	return WriteFile(destination, &memtable)
 }
 
 func processHeader(file *os.File) (*fileReader, error) {
@@ -261,14 +253,4 @@ func (sst *SSTable) Debug() string {
 		fmt.Fprintf(&sb, "0x%04X: %v\n", idx.offset, idx.key)
 	}
 	return sb.String()
-}
-
-func toSortedKeys(memtable map[string]string) []string {
-	var keys []string
-	for k := range memtable {
-		keys = append(keys, k)
-	}
-
-	sort.Strings(keys)
-	return keys
 }

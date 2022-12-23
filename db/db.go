@@ -17,7 +17,7 @@ type DB struct {
 	mu sync.RWMutex
 	// from earliest to latest sstable
 	store    []*store.SSTable
-	memtable map[string]string
+	memtable *store.Treap
 	wal      *store.WAL
 }
 
@@ -26,7 +26,7 @@ func New(dirname string) (*DB, error) {
 
 	memtable, err := store.LoadWAL(walpath)
 	if err != nil {
-		memtable = make(map[string]string)
+		memtable = &store.Treap{}
 	}
 
 	wal, err := store.NewWAL(walpath)
@@ -60,7 +60,7 @@ func (db *DB) Set(key, value string) {
 	}
 
 	// store in memtable
-	db.memtable[key] = value
+	db.memtable.Upsert(key, value)
 }
 
 func (db *DB) Delete(key string) {
@@ -77,7 +77,7 @@ func (db *DB) Get(key string) string {
 	// accessed.
 
 	// first check the memtable
-	if val, found := db.memtable[key]; found {
+	if val, found := db.memtable.Get(key); found {
 		return val
 	}
 
@@ -131,9 +131,7 @@ func (db *DB) Flush() error {
 		return err
 	}
 
-	for k := range db.memtable {
-		delete(db.memtable, k)
-	}
+	db.memtable = &store.Treap{}
 
 	sst, err := store.LoadSST(filename)
 	if err != nil {

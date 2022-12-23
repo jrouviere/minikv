@@ -5,7 +5,7 @@ import (
 	"os"
 )
 
-func LoadWAL(filename string) (map[string]string, error) {
+func LoadWAL(filename string) (*Treap, error) {
 	f, err := os.Open(filename)
 	if err != nil {
 		return nil, err
@@ -13,7 +13,7 @@ func LoadWAL(filename string) (map[string]string, error) {
 
 	rd := newReader(f)
 
-	memtable := make(map[string]string)
+	var memtable Treap
 
 	for {
 		key, err := rd.ReadString()
@@ -27,10 +27,10 @@ func LoadWAL(filename string) (map[string]string, error) {
 		if err != nil {
 			return nil, err
 		}
-		memtable[key] = val
+		memtable.Upsert(key, val)
 	}
 
-	return memtable, nil
+	return &memtable, nil
 }
 
 type WAL struct {

@@ -35,6 +35,27 @@ func BenchmarkSet(b *testing.B) {
 	}
 }
 
+func BenchmarkFlush(b *testing.B) {
+	tmpDir := setup(b)
+	defer teardown(b, tmpDir)
+
+	db, err := New(tmpDir)
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		b.StopTimer()
+		for k := 0; k < 1000; k++ {
+			db.Set("key_"+strconv.Itoa(k), "some test data")
+		}
+		b.StartTimer()
+		db.Flush()
+	}
+}
+
 func BenchmarkGet(b *testing.B) {
 	tmpDir := setup(b)
 	defer teardown(b, tmpDir)

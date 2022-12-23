@@ -19,7 +19,6 @@ Deleted keys are stored as en empty string.
 File format:
 
 magic: uint64
-N: uint64 (nb of keys)
 N times {[key] -> [value]}
 
 key and value are both string stored as:
@@ -225,10 +224,6 @@ func processHeader(file *os.File) (*fileReader, error) {
 
 	if m1 != magic {
 		return nil, fmt.Errorf("unexpected magic: %v", m1)
-	}
-
-	if _, err := rd.ReadUint64(); err != nil {
-		return nil, err
 	}
 
 	return rd, nil

@@ -3,9 +3,11 @@ package store
 import (
 	"io"
 	"os"
+
+	"github.com/jrouviere/minikv/avl"
 )
 
-func LoadWAL(filename string) (*Treap, error) {
+func LoadWAL(filename string) (*avl.Tree, error) {
 	f, err := os.Open(filename)
 	if err != nil {
 		return nil, err
@@ -13,7 +15,7 @@ func LoadWAL(filename string) (*Treap, error) {
 
 	rd := newReader(f)
 
-	var memtable Treap
+	var memtable avl.Tree
 
 	for {
 		key, err := rd.ReadString()

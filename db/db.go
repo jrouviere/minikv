@@ -7,6 +7,7 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/jrouviere/minikv/avl"
 	"github.com/jrouviere/minikv/store"
 )
 
@@ -17,7 +18,7 @@ type DB struct {
 	mu sync.RWMutex
 	// from earliest to latest sstable
 	store    []*store.SSTable
-	memtable *store.Treap
+	memtable *avl.Tree
 	wal      *store.WAL
 }
 
@@ -26,7 +27,7 @@ func New(dirname string) (*DB, error) {
 
 	memtable, err := store.LoadWAL(walpath)
 	if err != nil {
-		memtable = &store.Treap{}
+		memtable = &avl.Tree{}
 	}
 
 	wal, err := store.NewWAL(walpath)
@@ -131,7 +132,7 @@ func (db *DB) Flush() error {
 		return err
 	}
 
-	db.memtable = &store.Treap{}
+	db.memtable = &avl.Tree{}
 
 	sst, err := store.LoadSST(filename)
 	if err != nil {

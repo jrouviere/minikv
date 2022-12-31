@@ -6,6 +6,8 @@ import (
 	"os"
 	"sort"
 	"strings"
+
+	"github.com/jrouviere/minikv/avl"
 )
 
 const magic = 0x7473732d696e696d
@@ -35,7 +37,7 @@ type keyOff struct {
 	offset int64
 }
 
-func WriteFile(filename string, memtable *Treap) error {
+func WriteFile(filename string, memtable *avl.Tree) error {
 	sst, err := os.Create(filename)
 	if err != nil {
 		return err
@@ -49,11 +51,11 @@ func WriteFile(filename string, memtable *Treap) error {
 	}
 
 	var wrErr error
-	memtable.InorderTraversal(func(n *Node) {
-		if err := sstWr.WriteString(n.key); err != nil {
+	memtable.InorderTraversal(func(n *avl.Node) {
+		if err := sstWr.WriteString(n.Key); err != nil {
 			wrErr = err
 		}
-		if err := sstWr.WriteString(n.value); err != nil {
+		if err := sstWr.WriteString(n.Value); err != nil {
 			wrErr = err
 		}
 	})
@@ -186,7 +188,7 @@ func Merge(sst1, sst2 *SSTable, destination string) error {
 	// we use a memtable to simplify things
 	// but really the result should be written
 	// in a sst file directly
-	var memtable Treap
+	var memtable avl.Tree
 
 	key1, value1 := nextKey(rd1)
 	key2, value2 := nextKey(rd2)

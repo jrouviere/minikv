@@ -8,18 +8,22 @@ import (
 )
 
 type fileReader struct {
-	r io.ReadSeeker
+	f      io.ReadSeeker
+	r      *bufio.Reader
+	offset int64
 }
 
-func newReader(rd io.ReadSeeker) *fileReader {
+func newReader(rs io.ReadSeeker) *fileReader {
 	return &fileReader{
-		r: rd,
+		f: rs,
+		r: bufio.NewReader(rs),
 	}
 }
 
 func (rd *fileReader) ReadUint64() (uint64, error) {
 	var v uint64
 	err := binary.Read(rd.r, binary.LittleEndian, &v)
+	rd.offset += 8
 	return v, err
 }
 
@@ -28,9 +32,11 @@ func (rd *fileReader) ReadString() (string, error) {
 	if err := binary.Read(rd.r, binary.LittleEndian, &v); err != nil {
 		return "", err
 	}
+	rd.offset += 8
 
 	buf := make([]byte, v)
-	n, err := rd.r.Read(buf)
+	n, err := io.ReadFull(rd.r, buf)
+	rd.offset += int64(n)
 	if uint64(n) < v {
 		return "", fmt.Errorf("short read")
 	}
@@ -38,16 +44,17 @@ func (rd *fileReader) ReadString() (string, error) {
 }
 
 func (rd *fileReader) Offset() int64 {
-	offset, err := rd.r.Seek(0, io.SeekCurrent)
-	if err != nil {
-		return -1
-	}
-	return offset
+	return rd.offset
 }
 
-func (rd *fileReader) SeekTo(offset int64) (int64, error) {
-	return rd.r.Seek(offset, io.SeekStart)
+func (rd *fileReader) SeekTo(offset int64) error {
+	rd.offset = offset
+	_, err := rd.f.Seek(offset, io.SeekStart)
+	rd.r.Reset(rd.f)
+	return err
 }
+
+// ---
 
 type fileWriter struct {
 	w *bufio.Writer

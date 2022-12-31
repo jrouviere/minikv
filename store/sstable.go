@@ -130,7 +130,7 @@ func (sst *SSTable) Get(key string) (val string, found bool, err error) {
 	next--
 
 	start := sst.index[next].offset
-	if _, err := sstRd.SeekTo(start); err != nil {
+	if err := sstRd.SeekTo(start); err != nil {
 		return "", false, err
 	}
 
